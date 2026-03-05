@@ -1,0 +1,1 @@
+AR tracing app with AR table locking, 2 finger rotate and move gestures,perspective correction, and save and reopen project features. each project will store the image, opacity, scale, rotation, and position.
