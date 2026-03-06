@@ -1,7 +1,7 @@
-<!-- update -->
 <!DOCTYPE html>
 <html>
 <head>
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Savell Sketches</title>
 
@@ -9,8 +9,8 @@
 
 body{
 margin:0;
-background:black;
 overflow:hidden;
+background:black;
 font-family:sans-serif;
 }
 
@@ -27,30 +27,53 @@ top:50%;
 left:50%;
 transform:translate(-50%,-50%);
 touch-action:none;
+max-width:80%;
 }
 
 #controls{
+
 position:fixed;
-bottom:20px;
+bottom:15px;
 left:50%;
 transform:translateX(-50%);
-background:rgba(255,255,255,0.85);
+background:rgba(255,255,255,.9);
 padding:12px;
-border-radius:10px;
+border-radius:12px;
+text-align:center;
+
 }
 
 button{
-margin:5px;
+
+margin:4px;
+padding:6px;
+
+}
+
+#projectList{
+
+position:fixed;
+top:10px;
+left:10px;
+background:white;
+padding:10px;
+border-radius:10px;
+max-height:200px;
+overflow:auto;
+
 }
 
 </style>
+
 </head>
 
 <body>
 
 <video id="camera" autoplay playsinline></video>
 
-<img id="overlay"/>
+<img id="overlay">
+
+<canvas id="canvas" style="display:none"></canvas>
 
 <div id="controls">
 
@@ -59,14 +82,22 @@ margin:5px;
 <br>
 
 Opacity
+
 <input type="range" id="opacity" min="0" max="1" step="0.01" value="0.5">
 
 <br>
 
+<button onclick="makeOutline()">Outline</button>
+<button onclick="toggleLock()">Lock Surface</button>
+
+<br>
+
 <button onclick="saveProject()">Save</button>
-<button onclick="loadProject()">Load</button>
+<button onclick="showProjects()">My Projects</button>
 
 </div>
+
+<div id="projectList"></div>
 
 <script>
 
@@ -74,23 +105,39 @@ const video=document.getElementById("camera")
 const overlay=document.getElementById("overlay")
 
 navigator.mediaDevices.getUserMedia({
+
 video:{facingMode:"environment"}
+
 })
+
 .then(stream=>{
+
 video.srcObject=stream
+
 })
 
 document.getElementById("upload").onchange=e=>{
+
 const file=e.target.files[0]
+
 overlay.src=URL.createObjectURL(file)
+
 }
 
 document.getElementById("opacity").oninput=e=>{
+
 overlay.style.opacity=e.target.value
+
 }
 
-let posX=0,posY=0,scale=1,rotation=0
-let startX,startY
+let posX=0
+let posY=0
+let scale=1
+let rotation=0
+
+let startX
+let startY
+
 let initialDistance=0
 let initialAngle=0
 
@@ -126,11 +173,15 @@ posY=e.touches[0].clientY-startY
 if(e.touches.length===2){
 
 let newDistance=getDistance(e)
+
 scale*=newDistance/initialDistance
+
 initialDistance=newDistance
 
 let newAngle=getAngle(e)
+
 rotation+=newAngle-initialAngle
+
 initialAngle=newAngle
 
 }
@@ -142,10 +193,7 @@ updateTransform()
 function updateTransform(){
 
 overlay.style.transform=
-`translate(-50%,-50%)
-translate(${posX}px,${posY}px)
-scale(${scale})
-rotate(${rotation}rad)`
+`translate(-50%,-50%) translate(${posX}px,${posY}px) scale(${scale}) rotate(${rotation}rad)`
 
 }
 
@@ -167,33 +215,112 @@ return Math.atan2(dy,dx)
 
 }
 
-function saveProject(){
+function makeOutline(){
 
-const data={
-img:overlay.src,
-opacity:overlay.style.opacity,
-posX,posY,scale,rotation
+const img=overlay
+const canvas=document.getElementById("canvas")
+const ctx=canvas.getContext("2d")
+
+canvas.width=img.naturalWidth
+canvas.height=img.naturalHeight
+
+ctx.drawImage(img,0,0)
+
+let imageData=ctx.getImageData(0,0,canvas.width,canvas.height)
+
+let data=imageData.data
+
+for(let i=0;i<data.length;i+=4){
+
+let r=data[i]
+let g=data[i+1]
+let b=data[i+2]
+
+let brightness=(r+g+b)/3
+
+let edge=brightness<120?0:255
+
+data[i]=edge
+data[i+1]=edge
+data[i+2]=edge
+
 }
 
-localStorage.setItem("savellSketch",JSON.stringify(data))
+ctx.putImageData(imageData,0,0)
+
+overlay.src=canvas.toDataURL()
+
+}
+
+let locked=false
+
+function toggleLock(){
+
+locked=!locked
+
+if(locked){
+
+overlay.style.position="fixed"
+
+alert("Surface Locked")
+
+}else{
+
+alert("Unlocked")
+
+}
+
+}
+
+function saveProject(){
+
+let projects=JSON.parse(localStorage.getItem("savellProjects")||"[]")
+
+projects.push({
+
+img:overlay.src,
+opacity:overlay.style.opacity,
+posX,posY,scale,rotation,
+date:Date.now()
+
+})
+
+localStorage.setItem("savellProjects",JSON.stringify(projects))
 
 alert("Project Saved")
 
 }
 
-function loadProject(){
+function showProjects(){
 
-const data=JSON.parse(localStorage.getItem("savellSketch"))
+let projects=JSON.parse(localStorage.getItem("savellProjects")||"[]")
 
-if(!data)return
+let list=""
 
-overlay.src=data.img
-overlay.style.opacity=data.opacity
+projects.forEach((p,i)=>{
 
-posX=data.posX
-posY=data.posY
-scale=data.scale
-rotation=data.rotation
+list+=`<div style="padding:5px;border-bottom:1px solid #ccc" onclick="openProject(${i})">Project ${i+1}</div>`
+
+})
+
+document.getElementById("projectList").innerHTML=list
+
+}
+
+function openProject(i){
+
+let projects=JSON.parse(localStorage.getItem("savellProjects"))
+
+let p=projects[i]
+
+overlay.src=p.img
+
+overlay.style.opacity=p.opacity
+
+posX=p.posX
+posY=p.posY
+scale=p.scale
+rotation=p.rotation
 
 updateTransform()
 
